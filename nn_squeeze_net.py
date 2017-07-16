@@ -151,7 +151,7 @@ class SqueezeNet:
             else:
                 losses += [self._get_summaries(
                     step, sess, X_test, Y_test,
-                    batch_size, num_batches, verbose
+                    num_batches, verbose
                 )]
                 if _is_early_stopping(losses, patience, 1):
                     is_early_stopped = True
