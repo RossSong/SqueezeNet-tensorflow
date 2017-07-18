@@ -21,7 +21,7 @@ class SqueezeNet:
         with self.graph.as_default():
 
             with tf.device('/cpu:0'), tf.variable_scope('input_pipeline'):
-                self.init_data, x_batch, y_batch = _get_data(num_classes)
+                x_batch, y_batch = _get_data(num_classes)
 
             with tf.variable_scope('inputs'):
                 X = tf.placeholder_with_default(x_batch, [None, 224, 224, 3], 'X')
@@ -109,12 +109,12 @@ class SqueezeNet:
         sess = tf.Session(graph=self.graph)
         self.writer = tf.summary.FileWriter(dir_to_log, sess.graph)
 
-        feed_dict_train = {
-            'input_pipeline/X_train:0': X_train,
-            'input_pipeline/Y_train:0': Y_train,
-            'input_pipeline/batch_size:0': batch_size
-        }
-        sess.run(self.init_data, feed_dict_train)
+        # feed_dict_train = {
+        #     'input_pipeline/X_train:0': X_train,
+        #     'input_pipeline/Y_train:0': Y_train,
+        #     'input_pipeline/batch_size:0': batch_size
+        # }
+        # sess.run(self.init_data, feed_dict_train)
 
         if not warm:
             sess.run(self.init)
@@ -213,7 +213,7 @@ class SqueezeNet:
 
         rows = np.random.choice(
             np.arange(0, len(X_test)),
-            size=1024, replace=False
+            size=512, replace=False
         )
         feed_dict_test = {
             'inputs/X:0': X_test[rows],

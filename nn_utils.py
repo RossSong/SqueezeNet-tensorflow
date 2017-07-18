@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-def _get_data(num_classes):
+def _get_data_old(num_classes):
 
     X_train = tf.Variable(
         tf.placeholder(tf.float32, [None, 224, 224, 3], 'X_train'),
@@ -30,6 +30,46 @@ def _get_data(num_classes):
         shapes=[[224, 224, 3], [num_classes]]
     )
     return init, x_batch, y_batch
+
+
+def _get_data(num_classes):
+
+    filename_queue = tf.train.string_input_producer(['train.tfrecords'])
+    reader = tf.TFRecordReader()
+    _, serialized_example = reader.read(filename_queue)
+
+    features = {
+        'image_raw': tf.FixedLenFeature([], tf.string),
+        'target': tf.FixedLenFeature([], tf.int64)
+    }
+
+    features = tf.parse_single_example(serialized_example, features)
+
+    image = tf.decode_raw(features['image_raw'], tf.uint8)
+    target = tf.cast(features['target'], tf.int32)
+
+    image_shape = tf.stack([224, 224, 3])
+    image = tf.reshape(image, image_shape)
+    image = tf.cast(image, tf.float32)
+
+    mean = tf.constant([0.485, 0.456, 0.406], tf.float32, [3])
+    std = tf.constant([0.229, 0.224, 0.225], tf.float32, [3])
+    image = tf.subtract(image, mean)
+    image = tf.realdiv(image, std)
+
+    # three values that you need to tweak
+    min_after_dequeue = 10000
+    capacity = min_after_dequeue + 3*64
+    num_threads = 2
+
+    x_batch, y_batch = tf.train.shuffle_batch(
+        [image, target], batch_size=64, capacity,
+        min_after_dequeue, num_threads
+    )
+
+    y_batch = tf.one_hot(y_batch, num_classes, axis=1, dtype=tf.float32)
+
+    return x_batch, y_batch
 
 
 def _add_summaries():
