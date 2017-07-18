@@ -34,7 +34,7 @@ def _get_data_old(num_classes):
 
 def _get_data(num_classes):
 
-    filename_queue = tf.train.string_input_producer(['train.tfrecords'])
+    filename_queue = tf.train.string_input_producer(['/home/ubuntu/data/train.tfrecords'])
     reader = tf.TFRecordReader()
     _, serialized_example = reader.read(filename_queue)
 
@@ -61,9 +61,10 @@ def _get_data(num_classes):
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3*64
     num_threads = 2
+    batch_size = 64
 
     x_batch, y_batch = tf.train.shuffle_batch(
-        [image, target], batch_size=64, capacity,
+        [image, target], batch_size, capacity,
         min_after_dequeue, num_threads
     )
 

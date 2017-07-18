@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm
 
 
 def _bytes_feature(value):
@@ -15,7 +16,7 @@ def convert(images, targets, tfrecords_filename):
     n_samples = len(targets)
     writer = tf.python_io.TFRecordWriter(tfrecords_filename)
 
-    for j in range(n_samples):
+    for j in tqdm(range(n_samples)):
 
         image = images[j]
         target = targets[j]
@@ -37,5 +38,5 @@ train_targets = np.load('/home/ubuntu/data/train_targets.npy')
 val_images = np.load('/home/ubuntu/data/val_images.npy')
 val_targets = np.load('/home/ubuntu/data/val_targets.npy')
 
-convert(train_images, train_targets, 'train.tfrecords')
-convert(val_images, val_targets, 'val.tfrecords')
+convert(train_images, train_targets, '/home/ubuntu/data/train.tfrecords')
+convert(val_images, val_targets, '/home/ubuntu/data/val.tfrecords')

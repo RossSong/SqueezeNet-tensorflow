@@ -64,7 +64,7 @@ class SqueezeNet:
 
         self.graph.finalize()
 
-    def fit(self, run, X_train, Y_train, X_test, Y_test,
+    def fit(self, run, X_test, Y_test,
             batch_size, num_epochs, validation_step, patience=10,
             initial_weights=None, warm=False, verbose=True):
         """Fit the defined network.
@@ -125,7 +125,7 @@ class SqueezeNet:
         else:
             self.saver.restore(sess, dir_to_save + '/model')
 
-        num_batches = int(len(X_train)/batch_size)
+        num_batches = int(51200/batch_size)
         losses = []
         self.running_loss = 0.0
         self.running_accuracy = 0.0
