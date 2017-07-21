@@ -109,13 +109,6 @@ class SqueezeNet:
         sess = tf.Session(graph=self.graph)
         self.writer = tf.summary.FileWriter(dir_to_log, sess.graph)
 
-        # feed_dict_train = {
-        #     'input_pipeline/X_train:0': X_train,
-        #     'input_pipeline/Y_train:0': Y_train,
-        #     'input_pipeline/batch_size:0': batch_size
-        # }
-        # sess.run(self.init_data, feed_dict_train)
-
         if not warm:
             sess.run(self.init)
             if initial_weights is not None:

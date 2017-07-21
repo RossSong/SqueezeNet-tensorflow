@@ -20,6 +20,7 @@ def convert(images, targets, tfrecords_filename):
 
         image = images[j]
         target = targets[j]
+        target -= 1
 
         feature = {
             'image_raw': _bytes_feature(image.tostring()),
@@ -35,8 +36,8 @@ def convert(images, targets, tfrecords_filename):
 train_images = np.load('/home/ubuntu/data/train_images.npy')
 train_targets = np.load('/home/ubuntu/data/train_targets.npy')
 
-val_images = np.load('/home/ubuntu/data/val_images.npy')
-val_targets = np.load('/home/ubuntu/data/val_targets.npy')
+# val_images = np.load('/home/ubuntu/data/val_images.npy')
+# val_targets = np.load('/home/ubuntu/data/val_targets.npy')
 
 convert(train_images, train_targets, '/home/ubuntu/data/train.tfrecords')
-convert(val_images, val_targets, '/home/ubuntu/data/val.tfrecords')
+# convert(val_images, val_targets, '/home/ubuntu/data/val.tfrecords')

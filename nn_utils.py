@@ -1,54 +1,24 @@
 import tensorflow as tf
 
 
-def _get_data_old(num_classes):
-
-    X_train = tf.Variable(
-        tf.placeholder(tf.float32, [None, 224, 224, 3], 'X_train'),
-        trainable=False, collections=[],
-        validate_shape=False, expected_shape=[None, 224, 224, 3]
-    )
-    Y_train = tf.Variable(
-        tf.placeholder(tf.float32, [None, num_classes], 'Y_train'),
-        trainable=False, collections=[],
-        validate_shape=False, expected_shape=[None, num_classes]
-    )
-    batch_size = tf.Variable(
-        tf.placeholder(tf.int32, [], 'batch_size'),
-        trainable=False, collections=[]
-    )
-    init = tf.variables_initializer([X_train, Y_train, batch_size])
-
-    # three values that you need to tweak
-    min_after_dequeue = 10000
-    capacity = min_after_dequeue + 3*64
-    num_threads = 2
-
-    x_batch, y_batch = tf.train.shuffle_batch(
-        [X_train, Y_train], batch_size, capacity, min_after_dequeue,
-        num_threads, enqueue_many=True,
-        shapes=[[224, 224, 3], [num_classes]]
-    )
-    return init, x_batch, y_batch
-
-
 def _get_data(num_classes):
 
     filename_queue = tf.train.string_input_producer(['/home/ubuntu/data/train.tfrecords'])
     reader = tf.TFRecordReader()
-    _, serialized_example = reader.read(filename_queue)
+    enqueue_many_size = 10
+    _, serialized_example = reader.read_up_to(filename_queue, enqueue_many_size)
 
     features = {
         'image_raw': tf.FixedLenFeature([], tf.string),
         'target': tf.FixedLenFeature([], tf.int64)
     }
 
-    features = tf.parse_single_example(serialized_example, features)
+    features = tf.parse_example(serialized_example, features)
 
     image = tf.decode_raw(features['image_raw'], tf.uint8)
     target = tf.cast(features['target'], tf.int32)
 
-    image_shape = tf.stack([224, 224, 3])
+    image_shape = tf.stack([64, 224, 224, 3])
     image = tf.reshape(image, image_shape)
     image = tf.cast(image, tf.float32)
 
@@ -65,7 +35,7 @@ def _get_data(num_classes):
 
     x_batch, y_batch = tf.train.shuffle_batch(
         [image, target], batch_size, capacity,
-        min_after_dequeue, num_threads
+        min_after_dequeue, num_threads, enqueue_many=True
     )
 
     y_batch = tf.one_hot(y_batch, num_classes, axis=1, dtype=tf.float32)
