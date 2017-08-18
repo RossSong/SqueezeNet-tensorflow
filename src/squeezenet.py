@@ -1,14 +1,13 @@
 import tensorflow as tf
-import numpy as np
 import shutil
 import os
 import time
-from nn_utils import _get_data, _add_summaries, _is_early_stopping, _assign_weights
-from nn_parts import _mapping, _add_weight_decay
+from utils import _add_summaries, _is_early_stopping, _assign_weights, _get_data
+from parts import _mapping, _add_weight_decay
 
 
 class SqueezeNet:
-    def __init__(self, optimizer, num_classes=1000, weight_decay=None):
+    def __init__(self, optimizer, weight_decay=None, image_size=224, num_classes=1000):
         """Create the SqueezeNet computational graph.
 
         Arguments:
@@ -19,16 +18,26 @@ class SqueezeNet:
 
         self.graph = tf.Graph()
         with self.graph.as_default():
-
-            with tf.device('/cpu:0'), tf.variable_scope('input_pipeline'):
-                x_batch, y_batch = _get_data(num_classes)
-
-            with tf.variable_scope('inputs'):
-                X = tf.placeholder_with_default(x_batch, [None, 224, 224, 3], 'X')
-                Y = tf.placeholder_with_default(y_batch, [None, num_classes], 'Y')
-
+            
             with tf.variable_scope('control'):
                 is_training = tf.placeholder_with_default(True, [], 'is_training')
+                
+            with tf.device('/cpu:0'), tf.variable_scope('input_pipeline'):                
+                self.data_init, x_batch, y_batch = _get_data(
+                    num_classes, image_size, is_training
+                )
+                
+            with tf.variable_scope('inputs'):
+                X = tf.placeholder_with_default(x_batch, [None, image_size, image_size, 3], 'X')
+                Y = tf.placeholder_with_default(y_batch, [None, num_classes], 'Y')
+            
+            with tf.variable_scope('preprocessing'):
+                f255 = tf.constant(255.0, tf.float32, [])
+                mean = tf.constant([0.485, 0.456, 0.406], tf.float32, [3])
+                std = tf.constant([0.229, 0.224, 0.225], tf.float32, [3])
+                X /= f255
+                X -= mean
+                X /= std
 
             logits = _mapping(X, num_classes, is_training)
 
@@ -64,8 +73,8 @@ class SqueezeNet:
 
         self.graph.finalize()
 
-    def fit(self, run, X_test, Y_test,
-            batch_size, num_epochs, validation_step, patience=10,
+    def fit(self, run, train_tfrecords, val_tfrecords, batch_size, 
+            num_epochs, steps_per_epoch, validation_steps, patience=10,
             initial_weights=None, warm=False, verbose=True):
         """Fit the defined network.
 
@@ -97,8 +106,8 @@ class SqueezeNet:
             is_early_stopped: Boolean, if `True` then fitting is stopped early.
         """
 
-        dir_to_log = 'logs/run' + str(run)
-        dir_to_save = 'saved/run' + str(run)
+        dir_to_log = '../logs/run' + str(run)
+        dir_to_save = '../saved/run' + str(run)
         if os.path.exists(dir_to_log) and not warm:
             shutil.rmtree(dir_to_log)
         if os.path.exists(dir_to_save) and not warm:
@@ -108,51 +117,56 @@ class SqueezeNet:
 
         sess = tf.Session(graph=self.graph)
         self.writer = tf.summary.FileWriter(dir_to_log, sess.graph)
-
-        if not warm:
+        
+        if warm:
+            self.saver.restore(sess, dir_to_save + '/model')
+        else:
             sess.run(self.init)
             if initial_weights is not None:
                 for w in initial_weights:
                     op = self.assign_weights[w]
                     sess.run(op, {'utilities/' + w: initial_weights[w]})
-        else:
-            self.saver.restore(sess, dir_to_save + '/model')
-
-        num_batches = int(51200/batch_size)
+            
         losses = []
-        self.running_loss = 0.0
-        self.running_accuracy = 0.0
-        self.validation_step = validation_step
+        self.steps_per_epoch = steps_per_epoch
+        self.validation_steps = validation_steps
+        self.verbose = verbose
         is_early_stopped = False
         self.steps_trained = 0 if not warm else self.steps_trained
         training_steps = range(
             self.steps_trained + 1,
-            self.steps_trained + num_epochs*num_batches + 1
+            self.steps_trained + num_epochs*steps_per_epoch + 1
         )
-
+        
+        data_dict = {
+            'input_pipeline/train_file:0': train_tfrecords,
+            'input_pipeline/val_file:0': val_tfrecords,
+            'input_pipeline/batch_size:0': batch_size
+        }
+        sess.run(self.data_init, data_dict)
+        
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-
+        
         self.start = time.time()
+        self.running_loss, self.running_accuracy = 0.0, 0.0
+        
         for step in training_steps:
-            if (step % validation_step != 0):
+            if (step % steps_per_epoch != 0):
                 _, batch_loss, batch_accuracy = sess.run(
                     [self.optimize, self.log_loss, self.accuracy]
                 )
                 self.running_loss += batch_loss
                 self.running_accuracy += batch_accuracy
             else:
-                losses += [self._get_summaries(
-                    step, sess, X_test, Y_test,
-                    num_batches, verbose
-                )]
+                losses += [self._evaluate(step, sess)]
                 if _is_early_stopping(losses, patience, 1):
                     is_early_stopped = True
                     break
-                self.start = time.time()
-
+        
         coord.request_stop()
         coord.join(threads)
+        
         self.saver.save(sess, dir_to_save + '/model')
         self.run = run
         self.steps_trained = step
@@ -180,16 +194,16 @@ class SqueezeNet:
                 op = self.assign_weights[w]
                 sess.run(op, {'utilities/' + w: network_weights[w]})
         else:
-            self.saver.restore(sess, 'saved/run' + str(self.run) + '/model')
+            self.saver.restore(sess, '../saved/run' + str(self.run) + '/model')
 
         feed_dict = {'inputs/X:0': X, 'control/is_training:0': False}
         predictions = sess.run(self.predictions, feed_dict)
         sess.close()
         return predictions
 
-    def _get_summaries(self, step, sess, X_test, Y_test, num_batches, verbose):
+    def _evaluate(self, step, sess):
 
-        entry = '{0:.2f}'.format(step/num_batches)
+        entry = '{0:.2f}'.format(step/self.steps_per_epoch)
         run_options = tf.RunOptions(
             trace_level=tf.RunOptions.FULL_TRACE
         )
@@ -204,27 +218,26 @@ class SqueezeNet:
         self.running_loss += batch_loss
         self.running_accuracy += batch_accuracy
 
-        rows = np.random.choice(
-            np.arange(0, len(X_test)),
-            size=512, replace=False
-        )
-        feed_dict_test = {
-            'inputs/X:0': X_test[rows],
-            'inputs/Y:0': Y_test[rows],
-            'control/is_training:0': False
-        }
-        test_loss, test_accuracy = sess.run([self.log_loss, self.accuracy], feed_dict_test)
+        test_loss, test_accuracy = 0.0 , 0.0
+        for i in range(self.validation_steps):
+            batch_loss, batch_accuracy = sess.run(
+                [self.log_loss, self.accuracy], {'control/is_training:0': False}
+            )
+            test_loss += batch_loss
+            test_accuracy += batch_accuracy
 
-        train_loss = self.running_loss/self.validation_step
-        train_accuracy = self.running_accuracy/self.validation_step
-        end = time.time()
+        train_loss = self.running_loss/self.steps_per_epoch
+        train_accuracy = self.running_accuracy/self.steps_per_epoch
+        test_loss /= self.validation_steps
+        test_accuracy /= self.validation_steps
 
-        if verbose:
+        if self.verbose:
             print('{0}  {1:.3f} {2:.3f} {3:.3f} {4:.3f}  {5:.3f}'.format(
                 entry, train_loss, test_loss,
-                train_accuracy, test_accuracy, end - self.start
+                train_accuracy, test_accuracy, time.time() - self.start
             ))
-
-        self.running_loss = 0.0
-        self.running_accuracy = 0.0
+        
+        self.start = time.time()
+        self.running_loss, self.running_accuracy = 0.0, 0.0
+        
         return train_loss, test_loss, train_accuracy, test_accuracy
