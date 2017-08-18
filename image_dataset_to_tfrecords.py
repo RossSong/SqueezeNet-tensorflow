@@ -6,17 +6,14 @@ from PIL import Image
 import os
 
 
-mean = np.array([0.485, 0.456, 0.406], dtype='float32')
-std = np.array([0.229, 0.224, 0.225], dtype='float32')
-
-
 def collect_metadata(folder):
-    """Collect paths to images and their classes.
+    """Collect paths to images. Collect their classes.
         
     Arguments:
         folder: A path to a folder where directories with images are. 
             Each directory - separate class.
             Name of a directory - number of class.
+            Numbering is from 1 to n_classes.
     Returns:
         M: A pandas dataframe.
     """
@@ -24,7 +21,7 @@ def collect_metadata(folder):
     subdirs = list(os.walk(folder))[1:]
     metadata = []
 
-    for dir_path, _, files in tqdm(subdirs):
+    for dir_path, _, files in subdirs:
         dir_name = dir_path.split('/')[-1]
         for file_name in files:
             image_metadata = [dir_name, os.path.join(dir_name, file_name)]
@@ -59,7 +56,7 @@ def convert(images_metadata, folder, tfrecords_filename):
 
     writer = tf.python_io.TFRecordWriter(tfrecords_filename)
 
-    for i, row in tqdm(images_metadata.iterrows()):
+    for _, row in tqdm(images_metadata.iterrows()):
         
         file_path = os.path.join(folder, row.img_path)
         # read an image
@@ -71,10 +68,7 @@ def convert(images_metadata, folder, tfrecords_filename):
         
         # some preprocessing
         target -= 1
-        # array = array.astype('float32')
-        # array /= 255.0
-        # array -= mean
-        # array /= std
+        # so that classes are in the range 0..(n_classes - 1)
 
         feature = {
             'image_raw': _bytes_feature(array.tostring()),
@@ -95,5 +89,5 @@ val_dir = data_dir + 'val'
 train_metadata = collect_metadata(train_dir)
 val_metadata = collect_metadata(val_dir)
 
-#convert(train_metadata, train_dir, data_dir + 'train.tfrecords')
+convert(train_metadata, train_dir, data_dir + 'train.tfrecords')
 convert(val_metadata, val_dir, data_dir + 'val.tfrecords')
