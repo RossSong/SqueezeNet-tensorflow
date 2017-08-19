@@ -2,7 +2,7 @@ import tensorflow as tf
 
 
 def _get_data(num_classes, image_size, is_training):
-    
+
     train_file = tf.Variable(
         tf.placeholder(tf.string, [], 'train_file'),
         trainable=False, collections=[]
@@ -29,7 +29,7 @@ def _get_data(num_classes, image_size, is_training):
         lambda: (train_x_batch, train_y_batch),
         lambda: (val_x_batch, val_y_batch)
     )
-        
+
     return init_data, x_batch, y_batch
 
 
@@ -60,7 +60,7 @@ def _get_val_batch(num_classes, tfrecords_file_name, image_size, batch_size):
     capacity = 256
 
     x_batch, y_batch = tf.train.batch(
-        [images, targets], batch_size, 
+        [images, targets], batch_size,
         num_threads, capacity,
         enqueue_many=True
     )
@@ -85,7 +85,7 @@ def _get_images_and_targets(tfrecords_file_name, image_size):
 
     images = tf.decode_raw(features['image_raw'], tf.uint8)
     targets = tf.cast(features['target'], tf.int32)
-    
+
     n_images = tf.shape(images)[0]
     image_shape = tf.stack([n_images, image_size, image_size, 3])
     images = tf.reshape(images, image_shape)
@@ -102,19 +102,6 @@ def _add_summaries():
         summaries += [tf.summary.histogram(v.name[:-2] + '_hist', v)]
 
     return tf.summary.merge(summaries)
-
-
-def _is_early_stopping(losses, patience, index_to_watch):
-    test_losses = [x[index_to_watch] for x in losses]
-    if len(losses) > (patience + 4):
-        average = (test_losses[-(patience + 4)] +
-                   test_losses[-(patience + 3)] +
-                   test_losses[-(patience + 2)] +
-                   test_losses[-(patience + 1)] +
-                   test_losses[-patience])/5.0
-        return test_losses[-1] > average
-    else:
-        return False
 
 
 def _assign_weights():
