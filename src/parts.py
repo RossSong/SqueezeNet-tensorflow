@@ -65,11 +65,17 @@ def _fire(X, squeeze, expand, trainable=False):
 
 
 def _global_average_pooling(X):
-    return tf.reduce_mean(X, axis=[1, 2])
+    return tf.reduce_mean(
+        X, axis=[1, 2], 
+        name='global_average_pooling'
+    )
 
 
 def _max_pooling(X):
-    return tf.nn.max_pool(X, [1, 3, 3, 1], [1, 2, 2, 1], 'VALID')
+    return tf.nn.max_pool(
+        X, [1, 3, 3, 1], [1, 2, 2, 1], 'VALID', 
+        name='max_pooling'
+    )
 
 
 def _mapping(X, num_classes, is_training):

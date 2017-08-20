@@ -32,6 +32,9 @@ def collect_metadata(folder):
     
     M['class_number'] = M.class_number.apply(int)
     
+    # shuffle dataframe
+    M = M.sample(frac=1).reset_index(drop=True)
+    
     return M
     
     

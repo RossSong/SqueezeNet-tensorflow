@@ -46,7 +46,8 @@ def get_squeezenet(optimizer, weight_decay=None, image_size=224, num_classes=100
             log_loss = tf.losses.softmax_cross_entropy(Y, logits)
 
         if weight_decay is not None:
-            _add_weight_decay(weight_decay)
+            with tf.variable_scope('weight_decay'):
+                _add_weight_decay(weight_decay)
 
         with tf.variable_scope('total_loss'):
             total_loss = tf.losses.get_total_loss()

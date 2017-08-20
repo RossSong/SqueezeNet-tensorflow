@@ -18,7 +18,7 @@ def _is_early_stopping(losses, patience, index_to_watch):
         return False
 
 
-def fit(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
+def train(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
         num_epochs, steps_per_epoch, validation_steps, patience=10,
         initial_weights=None, warm=False, initial_epoch=1, verbose=True):
     """Fit the defined network.
@@ -74,10 +74,13 @@ def fit(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
     else:
         sess.run(init_op)
         if initial_weights is not None:
+            # keys in 'initial_weights' dict are full paths to the weights
+            # for example: 'features/fire9/expand3x3/kernel:0'
             for w in initial_weights:
                 op = assign_weights_op[w]
                 sess.run(op, {'utilities/' + w: initial_weights[w]})
-
+    
+    # things that will be returned
     losses = []
     is_early_stopped = False
 
@@ -97,16 +100,18 @@ def fit(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
+    # begin training
     for epoch in training_epochs:
 
         start_time = time.time()
         running_loss, running_accuracy = 0.0, 0.0
 
-        # at zeroth step also collect metadata
+        # at zeroth step also collect metadata and summaries
         run_options = tf.RunOptions(
             trace_level=tf.RunOptions.FULL_TRACE
         )
         run_metadata = tf.RunMetadata()
+        # do epoch's zeroth step 
         _, batch_loss, batch_accuracy, summary, grad_summary = sess.run(
             [optimize_op, log_loss_op, accuracy_op, summaries_op, grad_summaries_op],
             options=run_options, run_metadata=run_metadata
@@ -126,7 +131,8 @@ def fit(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
 
             running_loss += batch_loss
             running_accuracy += batch_accuracy
-
+        
+        # evaluate on the validation set
         test_loss, test_accuracy = evaluate(
             sess, validation_steps, log_loss_op, accuracy_op
         )
@@ -138,9 +144,11 @@ def fit(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
                 epoch, train_loss, test_loss,
                 train_accuracy, test_accuracy, time.time() - start_time
             ))
-
+        
+        # collect all losses and accuracies
         losses += [(epoch, train_loss, test_loss, train_accuracy, test_accuracy)]
-
+        
+        # consider a possibility of early stopping
         if _is_early_stopping(losses, patience, 2):
             is_early_stopped = True
             break
@@ -170,7 +178,7 @@ def evaluate(sess, validation_steps, log_loss_op, accuracy_op):
     return test_loss, test_accuracy
 
 
-def predict_proba(graph, X, run):
+def predict_proba(graph, ops, X, run=None, network_weights=None):
     """Predict classes with the fitted model.
 
     Arguments:
@@ -184,11 +192,21 @@ def predict_proba(graph, X, run):
             and of type 'float32'.
     """
     sess = tf.Session(graph=graph)
-
-    saver_op = graph.get_operation_by_name('utilities/saver')
-    predictions_op = graph.get_operation_by_name('softmax/predictions')
-
-    saver_op.restore(sess, '../saved/run' + str(run) + '/model')
+    
+    # get graph's ops
+    data_init_op, predictions_op, log_loss_op, optimize_op,\
+        grad_summaries_op, init_op, saver_op, assign_weights_op,\
+        accuracy_op, summaries_op = ops
+    # only predictions_op, saver_op, and assign_weights_op are used here
+    
+    if run is not None:
+        saver_op.restore(sess, 'saved/run' + str(run) + '/model')
+    elif network_weights is not None:
+        for w in network_weights:
+            op = assign_weights_op[w]
+            sess.run(op, {'utilities/' + w: network_weights[w]})
+    else:
+        print('Specify run or network_weights!')
 
     feed_dict = {'inputs/X:0': X, 'control/is_training:0': False}
     predictions = sess.run(predictions_op, feed_dict)
