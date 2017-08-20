@@ -4,6 +4,7 @@ import os
 import time
 
 
+# it decides if training must stop
 def _is_early_stopping(losses, patience, index_to_watch):
     test_losses = [x[index_to_watch] for x in losses]
     if len(losses) > (patience + 4):
@@ -19,30 +20,29 @@ def _is_early_stopping(losses, patience, index_to_watch):
 
 
 def train(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
-        num_epochs, steps_per_epoch, validation_steps, patience=10,
-        initial_weights=None, warm=False, initial_epoch=1, verbose=True):
-    """Fit the defined network.
+          num_epochs, steps_per_epoch, validation_steps, patience=5,
+          initial_weights=None, warm=False, initial_epoch=1, verbose=True):
+    """Fit a defined network.
 
     Arguments:
         run: An integer that determines a folder where logs and the fitted model
             will be saved.
-        X_train: A numpy array of shape [n_train_samples, n_features]
-            and of type 'float32'.
-        Y_train: A numpy array of shape [n_train_samples, n_classes]
-            and of type 'float32'.
-        X_test: A numpy array of shape [n_test_samples, n_features]
-            and of type 'float32'.
-        Y_test: A numpy array of shape [n_test_samples, n_classes]
-            and of type 'float32'.
+        graph: A Tensorflow graph.
+        ops: A list of ops from the graph.
+        train_tfrecords: A string, path to tfrecords train dataset file.
+        val_tfrecords: A string, path to tfrecords validation dataset file.
         batch_size: An integer.
         num_epochs: An integer.
-        validation_step: An integer, establishes the step when train and test
-            logloss/accuracy will be computed and shown.
-        patience: An integer, number of validation steps before early stopping if
+        steps_per_epoch: An integer, number of optimization steps per epoch.
+        validation_steps: An integer, number of batches from validation dataset
+            to evaluate on.
+        patience: An integer, number of epochs before early stopping if
             test logloss isn't improving.
-        initial_weights: A dictionary of weights to initialize network with.
+        initial_weights: A dictionary of weights to initialize network with or None.
         warm: Boolean, if `True` then resume training from the previously
             saved model.
+        initial_epoch: epoch at which to start training
+            (useful for resuming a previous training run)
         verbose: Boolean, whether to print train and test logloss/accuracy
             during fitting.
 
@@ -79,7 +79,7 @@ def train(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
             for w in initial_weights:
                 op = assign_weights_op[w]
                 sess.run(op, {'utilities/' + w: initial_weights[w]})
-    
+
     # things that will be returned
     losses = []
     is_early_stopped = False
@@ -111,7 +111,7 @@ def train(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
             trace_level=tf.RunOptions.FULL_TRACE
         )
         run_metadata = tf.RunMetadata()
-        # do epoch's zeroth step 
+        # do epoch's zeroth step
         _, batch_loss, batch_accuracy, summary, grad_summary = sess.run(
             [optimize_op, log_loss_op, accuracy_op, summaries_op, grad_summaries_op],
             options=run_options, run_metadata=run_metadata
@@ -131,9 +131,9 @@ def train(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
 
             running_loss += batch_loss
             running_accuracy += batch_accuracy
-        
+
         # evaluate on the validation set
-        test_loss, test_accuracy = evaluate(
+        test_loss, test_accuracy = _evaluate(
             sess, validation_steps, log_loss_op, accuracy_op
         )
         train_loss = running_loss/steps_per_epoch
@@ -144,10 +144,10 @@ def train(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
                 epoch, train_loss, test_loss,
                 train_accuracy, test_accuracy, time.time() - start_time
             ))
-        
+
         # collect all losses and accuracies
         losses += [(epoch, train_loss, test_loss, train_accuracy, test_accuracy)]
-        
+
         # consider a possibility of early stopping
         if _is_early_stopping(losses, patience, 2):
             is_early_stopped = True
@@ -162,9 +162,9 @@ def train(run, graph, ops, train_tfrecords, val_tfrecords, batch_size,
     return losses, is_early_stopped
 
 
-def evaluate(sess, validation_steps, log_loss_op, accuracy_op):
+def _evaluate(sess, validation_steps, log_loss_op, accuracy_op):
 
-    test_loss, test_accuracy = 0.0 , 0.0
+    test_loss, test_accuracy = 0.0, 0.0
     for i in range(validation_steps):
         batch_loss, batch_accuracy = sess.run(
             [log_loss_op, accuracy_op], {'control/is_training:0': False}
@@ -179,26 +179,30 @@ def evaluate(sess, validation_steps, log_loss_op, accuracy_op):
 
 
 def predict_proba(graph, ops, X, run=None, network_weights=None):
-    """Predict classes with the fitted model.
+    """Predict probabilities with a fitted model.
 
     Arguments:
+        graph: A Tensorflow graph.
+        ops: A list of ops from the graph.
         X: A numpy array of shape [n_samples, n_features]
             and of type 'float32'.
+        run: An integer that determines a folder where a fitted model
+            is saved or None.
         network_weights: A dictionary of weights to initialize
-            network with or None.
+            network with or None. You must specify either run or network_weights.
 
     Returns:
         predictions: A numpy array of shape [n_samples, n_classes]
             and of type 'float32'.
     """
     sess = tf.Session(graph=graph)
-    
+
     # get graph's ops
     data_init_op, predictions_op, log_loss_op, optimize_op,\
         grad_summaries_op, init_op, saver_op, assign_weights_op,\
         accuracy_op, summaries_op = ops
     # only predictions_op, saver_op, and assign_weights_op are used here
-    
+
     if run is not None:
         saver_op.restore(sess, 'saved/run' + str(run) + '/model')
     elif network_weights is not None:

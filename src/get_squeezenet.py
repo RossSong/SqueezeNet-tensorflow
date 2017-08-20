@@ -2,16 +2,17 @@ import tensorflow as tf
 import shutil
 import os
 import time
-from utils import _add_summaries, _assign_weights, _get_data
-from parts import _mapping, _add_weight_decay
+from tf_utils import _add_summaries, _assign_weights, _get_data
+from network_parts import _mapping, _add_weight_decay
 
 
 def get_squeezenet(optimizer, weight_decay=None, image_size=224, num_classes=1000):
-    """Create the SqueezeNet computational graph.
+    """Create a SqueezeNet computational graph.
 
     Arguments:
         optimizer: A Tensorflow optimizer.
         weight_decay: A scalar or None.
+        image_size: An integer, input image size.
         num_classes: An integer.
 
     """

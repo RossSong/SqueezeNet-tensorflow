@@ -1,6 +1,7 @@
 import tensorflow as tf
 
 
+# input pipeline
 def _get_data(num_classes, image_size, is_training):
 
     train_file = tf.Variable(
@@ -70,9 +71,11 @@ def _get_val_batch(num_classes, tfrecords_file_name, image_size, batch_size):
 
 
 def _get_images_and_targets(tfrecords_file_name, image_size):
+    # read images and their classes for a tfrecords file
 
     filename_queue = tf.train.string_input_producer([tfrecords_file_name])
     reader = tf.TFRecordReader()
+    # this number you need to tweak
     enqueue_many_size = 10
     _, serialized_example = reader.read_up_to(filename_queue, enqueue_many_size)
 
@@ -95,6 +98,8 @@ def _get_images_and_targets(tfrecords_file_name, image_size):
 
 
 def _add_summaries():
+    # add histograms of all trainable variables
+
     summaries = []
     trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
 
@@ -105,6 +110,7 @@ def _add_summaries():
 
 
 def _assign_weights():
+    # add ops that can be used to load pretrained weights into the model
 
     assign_weights_dict = {}
     model_vars = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
