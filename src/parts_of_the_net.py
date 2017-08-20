@@ -118,7 +118,8 @@ def _mapping(X, num_classes, is_training):
         result = _nonlinearity(result)
 
         logits = _global_average_pooling(result)
-        return logits
+
+    return logits
 
 
 def _add_weight_decay(weight_decay):
