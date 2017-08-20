@@ -71,7 +71,7 @@ def _get_val_batch(num_classes, tfrecords_file_name, image_size, batch_size):
 
 
 def _get_images_and_targets(tfrecords_file_name, image_size):
-    # read images and their classes for a tfrecords file
+    # read images and their classes from a tfrecords file
 
     filename_queue = tf.train.string_input_producer([tfrecords_file_name])
     reader = tf.TFRecordReader()
@@ -95,29 +95,3 @@ def _get_images_and_targets(tfrecords_file_name, image_size):
     images = tf.cast(images, tf.float32)
 
     return images, targets
-
-
-def _add_summaries():
-    # add histograms of all trainable variables
-
-    summaries = []
-    trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-
-    for v in trainable_vars:
-        summaries += [tf.summary.histogram(v.name[:-2] + '_hist', v)]
-
-    return tf.summary.merge(summaries)
-
-
-def _assign_weights():
-    # add ops that can be used to load pretrained weights into the model
-
-    assign_weights_dict = {}
-    model_vars = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
-
-    for v in model_vars:
-        assign_weights_dict[v.name] = v.assign(
-            tf.placeholder(tf.float32, v.shape, v.name[:-2])
-        )
-
-    return assign_weights_dict

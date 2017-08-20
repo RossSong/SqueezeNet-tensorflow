@@ -1,9 +1,6 @@
 import tensorflow as tf
-import shutil
-import os
-import time
-from tf_utils import _add_summaries, _assign_weights, _get_data
-from network_parts import _mapping, _add_weight_decay
+from input_utils import _get_data
+from parts_of_the_net import _mapping, _add_weight_decay
 
 
 def get_squeezenet(optimizer, weight_decay=None, image_size=224, num_classes=1000):
@@ -78,3 +75,29 @@ def get_squeezenet(optimizer, weight_decay=None, image_size=224, num_classes=100
         accuracy, summaries
     ]
     return graph, ops
+
+
+def _add_summaries():
+    # add histograms of all trainable variables
+
+    summaries = []
+    trainable_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+
+    for v in trainable_vars:
+        summaries += [tf.summary.histogram(v.name[:-2] + '_hist', v)]
+
+    return tf.summary.merge(summaries)
+
+
+def _assign_weights():
+    # add ops that can be used to load pretrained weights into the model
+
+    assign_weights_dict = {}
+    model_vars = tf.get_collection(tf.GraphKeys.MODEL_VARIABLES)
+
+    for v in model_vars:
+        assign_weights_dict[v.name] = v.assign(
+            tf.placeholder(tf.float32, v.shape, v.name[:-2])
+        )
+
+    return assign_weights_dict
